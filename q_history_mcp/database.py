@@ -45,41 +45,37 @@ class QCliDatabase:
     async def list_conversations(self, limit: int = 50) -> List[Dict[str, Any]]:
         """List recent conversations with metadata."""
         def _query():
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            
-            # Get conversation keys from SQLite
-            cursor = conn.execute("""
-                SELECT key, value FROM conversations 
-                ORDER BY key DESC 
-                LIMIT ?
-            """, (limit,))
-            
             results = []
-            for row in cursor:
+            
+            # Get all history files (ignore SQLite for now since keys don't match)
+            history_files = list(self.history_dir.glob("chat-history-*.json"))
+            
+            # Sort by modification time (newest first)
+            history_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+            
+            for history_file in history_files[:limit]:
                 try:
-                    # Load JSON file for this conversation
-                    history_file = self.history_dir / f"chat-history-{row['key']}.json"
-                    if history_file.exists():
-                        with open(history_file, 'r') as f:
-                            conv_data = json.load(f)
-                        
-                        # Extract metadata
-                        history = conv_data.get("history", [])
-                        message_count = len(history) if isinstance(history, list) else 0
-                        
-                        results.append({
-                            'id': row['key'],
-                            'created_at': history_file.stat().st_ctime,
-                            'updated_at': history_file.stat().st_mtime,
-                            'directory': conv_data.get('directory', 'unknown'),
-                            'message_count': message_count,
-                            'preview': self._get_conversation_preview(history)
-                        })
+                    with open(history_file, 'r') as f:
+                        conv_data = json.load(f)
+                    
+                    # Extract conversation ID from filename
+                    conv_id = history_file.stem.replace("chat-history-", "")
+                    
+                    # Extract metadata
+                    history = conv_data.get("history", [])
+                    message_count = len(history) if isinstance(history, list) else 0
+                    
+                    results.append({
+                        'id': conv_id,
+                        'created_at': history_file.stat().st_ctime,
+                        'updated_at': history_file.stat().st_mtime,
+                        'directory': conv_data.get('directory', 'unknown'),
+                        'message_count': message_count,
+                        'preview': self._get_conversation_preview(history)
+                    })
                 except (json.JSONDecodeError, FileNotFoundError, KeyError):
                     continue
             
-            conn.close()
             return results
         
         return await asyncio.get_event_loop().run_in_executor(None, _query)
