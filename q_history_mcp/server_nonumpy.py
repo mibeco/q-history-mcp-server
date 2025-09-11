@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.ERROR, stream=sys.stderr)
 
 mcp = FastMCP(
     name='q-history-mcp',
-    instructions="""Q CLI History server with semantic search capabilities."""
+    instructions="""Q CLI History server with basic conversation search capabilities."""
 )
 
 @mcp.tool(
