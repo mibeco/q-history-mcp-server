@@ -72,6 +72,7 @@ def main():
     """Run the MCP server."""
     parser = argparse.ArgumentParser(description='Q CLI History MCP Server')
     parser.add_argument('--test', action='store_true', help='Test server functionality')
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--version', action='version', version='q-history-mcp 1.0.0')
     
     # If no args or --help, show help and exit
@@ -81,20 +82,42 @@ def main():
     
     args = parser.parse_args()
     
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG, stream=sys.stderr)
+        print("Debug logging enabled", file=sys.stderr)
+    
     if args.test:
         print("Testing Q CLI History MCP Server...")
         try:
             from q_history_mcp.database import QCliDatabase
             db = QCliDatabase()
             print(f"✅ Database found at: {db.db_path}")
-            print("✅ Server ready")
+            print(f"✅ History directory: {db.history_dir}")
+            
+            # Test a simple query
+            import asyncio
+            async def test_query():
+                convs = await db.list_conversations(limit=3)
+                print(f"✅ Found {len(convs)} conversations")
+                return len(convs) > 0
+            
+            has_data = asyncio.run(test_query())
+            if has_data:
+                print("✅ Server ready with conversation data")
+            else:
+                print("⚠️  Server ready but no conversations found")
         except Exception as e:
             print(f"❌ Error: {e}")
             sys.exit(1)
         return
     
     # Start MCP server
-    mcp.run()
+    print("Starting Q CLI History MCP Server...", file=sys.stderr)
+    try:
+        mcp.run()
+    except Exception as e:
+        print(f"Server error: {e}", file=sys.stderr)
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()
