@@ -97,7 +97,7 @@ def main():
             # Test a simple query
             import asyncio
             async def test_query():
-                convs = await db.list_conversations(limit=3)
+                convs = await db.list_conversations(limit=20)
                 print(f"✅ Found {len(convs)} conversations")
                 return len(convs) > 0
             

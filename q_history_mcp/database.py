@@ -47,7 +47,80 @@ class QCliDatabase:
         def _query():
             results = []
             
-            # Get all history files (ignore SQLite for now since keys don't match)
+            # Read from SQLite database (main storage)
+            try:
+                import sqlite3
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT key, value FROM conversations ORDER BY rowid DESC")
+                    
+                    for key, value in cursor.fetchall():
+                        try:
+                            conv_data = json.loads(value)
+                            conv_id = conv_data.get('conversation_id', key.split('/')[-1])
+                            
+                            # Count messages in history
+                            message_count = 0
+                            preview = "No preview available"
+                            agent_info = None
+                            
+                            if 'history' in conv_data and conv_data['history']:
+                                for history_entry in conv_data['history']:
+                                    if isinstance(history_entry, list):
+                                        message_count += len(history_entry)
+                                        
+                                        # Get preview from first user prompt
+                                        if preview == "No preview available":
+                                            for msg in history_entry:
+                                                if isinstance(msg, dict) and 'content' in msg:
+                                                    if 'Prompt' in msg['content']:
+                                                        prompt_text = msg['content']['Prompt'].get('prompt', '')
+                                                        if prompt_text:
+                                                            preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
+                                                            break
+                                        
+                                        # Look for agent information in additional_context
+                                        if not agent_info:
+                                            for msg in history_entry:
+                                                if isinstance(msg, dict) and 'additional_context' in msg:
+                                                    context = msg['additional_context']
+                                                    if 'agent' in context.lower() or 'specialist' in context.lower():
+                                                        # Try to extract agent name from context
+                                                        lines = context.split('\n')
+                                                        for line in lines:
+                                                            if 'agent' in line.lower() and ('specialist' in line.lower() or 'with' in line.lower()):
+                                                                agent_info = line.strip()[:50]
+                                                                break
+                            
+                            if message_count > 0:
+                                # Extract directory name from path
+                                workspace = key.split('|')[0] if '|' in key else key
+                                if workspace.startswith('/'):
+                                    workspace = workspace.split('/')[-1] or workspace.split('/')[-2]
+                                
+                                results.append({
+                                    'id': conv_id,
+                                    'message_count': message_count,
+                                    'preview': preview,
+                                    'created_date': 'Unknown',
+                                    'workspace': workspace,
+                                    'full_path': key.split('|')[0] if '|' in key else key,
+                                    'agent': agent_info or 'Default Q'
+                                })
+                                
+                                if len(results) >= limit:
+                                    break
+                                    
+                        except Exception as e:
+                            continue
+                            
+                return results
+                
+            except Exception as e:
+                # Fallback to JSON files
+                pass
+            
+            # Fallback: JSON files in history directory
             history_files = list(self.history_dir.glob("chat-history-*.json"))
             
             # Sort by modification time (newest first)
@@ -61,18 +134,31 @@ class QCliDatabase:
                     # Extract conversation ID from filename
                     conv_id = history_file.stem.replace("chat-history-", "")
                     
-                    # Extract metadata
-                    history = conv_data.get("history", [])
-                    message_count = len(history) if isinstance(history, list) else 0
+                    # Extract metadata from LokiJS format
+                    messages = []
+                    message_count = 0
                     
-                    results.append({
-                        'id': conv_id,
-                        'created_at': history_file.stat().st_ctime,
-                        'updated_at': history_file.stat().st_mtime,
-                        'directory': conv_data.get('directory', 'unknown'),
-                        'message_count': message_count,
-                        'preview': self._get_conversation_preview(history)
-                    })
+                    # Navigate the LokiJS structure
+                    if 'collections' in conv_data and len(conv_data['collections']) > 0:
+                        tabs_collection = conv_data['collections'][0]
+                        if 'data' in tabs_collection and len(tabs_collection['data']) > 0:
+                            tab_data = tabs_collection['data'][0]
+                            if 'conversations' in tab_data and len(tab_data['conversations']) > 0:
+                                conversation = tab_data['conversations'][0]
+                                if 'messages' in conversation:
+                                    messages = conversation['messages']
+                                    message_count = len(messages)
+                    
+                    # Only include conversations that have messages
+                    if message_count > 0:
+                        results.append({
+                            'id': conv_id,
+                            'created_at': history_file.stat().st_ctime,
+                            'updated_at': history_file.stat().st_mtime,
+                            'directory': 'unknown',  # Not available in this format
+                            'message_count': message_count,
+                            'preview': self._get_conversation_preview(messages)
+                        })
                 except (json.JSONDecodeError, FileNotFoundError, KeyError):
                     continue
             
@@ -87,7 +173,17 @@ class QCliDatabase:
             if history_file.exists():
                 try:
                     with open(history_file, 'r') as f:
-                        return json.load(f)
+                        data = json.load(f)
+                    
+                    # Extract the actual conversation from LokiJS format
+                    if 'collections' in data and len(data['collections']) > 0:
+                        tabs_collection = data['collections'][0]
+                        if 'data' in tabs_collection and len(tabs_collection['data']) > 0:
+                            tab_data = tabs_collection['data'][0]
+                            if 'conversations' in tab_data and len(tab_data['conversations']) > 0:
+                                return tab_data['conversations'][0]
+                    
+                    return data  # Fallback to raw data
                 except json.JSONDecodeError:
                     return None
             return None
@@ -110,16 +206,28 @@ class QCliDatabase:
                         conv_data = json.loads(content)
                         conv_id = history_file.stem.replace("chat-history-", "")
                         
-                        history = conv_data.get("history", [])
-                        message_count = len(history) if isinstance(history, list) else 0
+                        # Extract metadata from LokiJS format
+                        messages = []
+                        message_count = 0
+                        
+                        # Navigate the LokiJS structure
+                        if 'collections' in conv_data and len(conv_data['collections']) > 0:
+                            tabs_collection = conv_data['collections'][0]
+                            if 'data' in tabs_collection and len(tabs_collection['data']) > 0:
+                                tab_data = tabs_collection['data'][0]
+                                if 'conversations' in tab_data and len(tab_data['conversations']) > 0:
+                                    conversation = tab_data['conversations'][0]
+                                    if 'messages' in conversation:
+                                        messages = conversation['messages']
+                                        message_count = len(messages)
                         
                         results.append({
                             'id': conv_id,
                             'created_at': history_file.stat().st_ctime,
                             'updated_at': history_file.stat().st_mtime,
-                            'directory': conv_data.get('directory', 'unknown'),
+                            'directory': 'unknown',  # Not available in this format
                             'message_count': message_count,
-                            'preview': self._get_conversation_preview(history)
+                            'preview': self._get_conversation_preview(messages)
                         })
                         
                         if len(results) >= limit:
@@ -134,19 +242,18 @@ class QCliDatabase:
         
         return await asyncio.get_event_loop().run_in_executor(None, _query)
     
-    def _get_conversation_preview(self, history: List) -> str:
-        """Extract a preview from conversation history."""
-        if not history or not isinstance(history, list):
+    def _get_conversation_preview(self, messages: List) -> str:
+        """Extract a preview from conversation messages."""
+        if not messages or not isinstance(messages, list):
             return "No content"
         
-        for turn in history[:3]:  # Check first few turns
-            if isinstance(turn, list):
-                for message in turn:
-                    if isinstance(message, dict):
-                        if 'content' in message and isinstance(message['content'], dict):
-                            if 'Prompt' in message['content']:
-                                prompt = message['content']['Prompt'].get('prompt', '')
-                                if prompt:
-                                    return prompt[:100] + "..." if len(prompt) > 100 else prompt
+        # Look for the first user prompt in the messages
+        for message in messages[:5]:  # Check first few messages
+            if isinstance(message, dict):
+                # Check for the new LokiJS format
+                if message.get('type') == 'prompt' and 'body' in message:
+                    body = message['body']
+                    if body and isinstance(body, str):
+                        return body[:100] + "..." if len(body) > 100 else body
         
         return "No readable content"
