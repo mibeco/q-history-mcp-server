@@ -52,6 +52,11 @@ class QCliDatabase:
                 import sqlite3
                 with sqlite3.connect(self.db_path) as conn:
                     cursor = conn.cursor()
+                    
+                    # Get rowid range to establish relative timestamps
+                    cursor.execute("SELECT MIN(rowid), MAX(rowid) FROM conversations")
+                    min_rowid, max_rowid = cursor.fetchone()
+                    
                     cursor.execute("SELECT rowid, key, value FROM conversations ORDER BY rowid DESC")
                     
                     for rowid, key, value in cursor.fetchall():
@@ -59,9 +64,14 @@ class QCliDatabase:
                             conv_data = json.loads(value)
                             conv_id = conv_data.get('conversation_id', key.split('/')[-1])
                             
-                            # Convert rowid to approximate timestamp
+                            # Convert rowid to realistic timestamp (higher rowid = more recent)
                             import datetime
-                            estimated_timestamp = datetime.datetime.now() - datetime.timedelta(seconds=(1000000 - rowid) * 60)
+                            if max_rowid > min_rowid:
+                                # Spread conversations over last 90 days, with newest having highest rowid
+                                days_ago = 90 * (max_rowid - rowid) / (max_rowid - min_rowid)
+                            else:
+                                days_ago = 0
+                            estimated_timestamp = datetime.datetime.now() - datetime.timedelta(days=days_ago)
                             
                             # Count messages in history
                             message_count = 0
