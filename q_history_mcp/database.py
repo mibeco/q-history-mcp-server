@@ -81,14 +81,19 @@ class QCliDatabase:
                             if 'history' in conv_data and conv_data['history']:
                                 for history_entry in conv_data['history']:
                                     if isinstance(history_entry, list):
-                                        message_count += len(history_entry)
+                                        # Count actual messages (not just list length)
+                                        for msg in history_entry:
+                                            if isinstance(msg, dict):
+                                                # Count user prompts and assistant responses
+                                                if ('content' in msg and 'Prompt' in msg.get('content', {})) or 'ToolUse' in msg:
+                                                    message_count += 1
                                         
                                         # Get preview from first user prompt
                                         if preview == "No preview available":
                                             for msg in history_entry:
                                                 if isinstance(msg, dict) and 'content' in msg:
-                                                    if 'Prompt' in msg['content']:
-                                                        prompt_text = msg['content']['Prompt'].get('prompt', '')
+                                                    if 'Prompt' in msg['content'] and 'prompt' in msg['content']['Prompt']:
+                                                        prompt_text = msg['content']['Prompt']['prompt']
                                                         if prompt_text:
                                                             preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                                                             break
@@ -252,14 +257,19 @@ class QCliDatabase:
                             if 'history' in conv_data and conv_data['history']:
                                 for history_entry in conv_data['history']:
                                     if isinstance(history_entry, list):
-                                        message_count += len(history_entry)
+                                        # Count actual messages (not just list length)
+                                        for msg in history_entry:
+                                            if isinstance(msg, dict):
+                                                # Count user prompts and assistant responses
+                                                if ('content' in msg and 'Prompt' in msg.get('content', {})) or 'ToolUse' in msg:
+                                                    message_count += 1
                                         
                                         # Get preview from first user prompt
                                         if preview == "No preview available":
                                             for msg in history_entry:
                                                 if isinstance(msg, dict) and 'content' in msg:
-                                                    if 'Prompt' in msg['content']:
-                                                        prompt_text = msg['content']['Prompt'].get('prompt', '')
+                                                    if 'Prompt' in msg['content'] and 'prompt' in msg['content']['Prompt']:
+                                                        prompt_text = msg['content']['Prompt']['prompt']
                                                         if prompt_text:
                                                             preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                                                             break
