@@ -75,8 +75,8 @@ def main():
     parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     parser.add_argument('--version', action='version', version='q-history-mcp 1.0.0')
     
-    # If no args or --help, show help and exit
-    if len(sys.argv) == 1 or '--help' in sys.argv or '-h' in sys.argv:
+    # Only show help if explicitly requested
+    if '--help' in sys.argv or '-h' in sys.argv:
         parser.print_help()
         return
     
@@ -111,7 +111,7 @@ def main():
             sys.exit(1)
         return
     
-    # Start MCP server
+    # Start MCP server (default behavior when no arguments)
     print("Starting Q CLI History MCP Server...", file=sys.stderr)
     try:
         mcp.run()
