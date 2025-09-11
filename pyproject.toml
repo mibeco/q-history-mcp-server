@@ -28,6 +28,8 @@ q-history-mcp = "q_history_mcp.server_nonumpy:main"
 Homepage = "https://github.com/mibeco/q-history-mcp-server"
 Repository = "https://github.com/mibeco/q-history-mcp-server"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["q_history_mcp*"]
+[tool.setuptools]
+packages = ["q_history_mcp"]
+
+[tool.setuptools.package-data]
+q_history_mcp = ["*.py"]
