@@ -1,78 +1,63 @@
 # Installation Guide
 
-Complete installation instructions for Q CLI History MCP Server on Amazon Linux and other systems.
+Simple installation for Q CLI History MCP Server using pipx (recommended) or manual setup.
 
 ## Prerequisites
 
 - **Amazon Q Developer CLI** installed and configured with conversation history
-- **Python 3.8+** (Python 3.10+ recommended)
+- **Python 3.8+** 
 - **Git** for cloning the repository
-- **4GB+ RAM** for semantic search features
 
 ## Quick Installation (Recommended)
 
 ```bash
-# Clone and install in one step
+# Clone and install with pipx (handles all dependencies automatically)
 git clone https://github.com/mibeco/q-history-mcp-server.git
 cd q-history-mcp-server
 ./install.sh
 ```
 
-## Manual Installation
+This will:
+- Install pipx if not available
+- Install the package in an isolated environment
+- Configure the Q CLI agent automatically
+- No manual dependency management needed!
 
-### Step 1: System Dependencies (Amazon Linux)
+## Manual Installation (Alternative)
+
+If you prefer manual control:
+
+### Step 1: Install pipx
 
 ```bash
-# Update system packages
-sudo yum update -y
+# Amazon Linux/RHEL
+sudo yum install -y python3-pip
+python3 -m pip install --user pipx
+pipx ensurepath
 
-# Install Python 3.10+ and development tools
-sudo yum install -y python3 python3-pip python3-devel gcc gcc-c++ make
+# Ubuntu/Debian  
+sudo apt install pipx
 
-# Verify Python version (should be 3.8+)
-python3 --version
+# macOS
+brew install pipx
 ```
 
-### Step 2: Clone Repository
+### Step 2: Install Package
 
 ```bash
 git clone https://github.com/mibeco/q-history-mcp-server.git
 cd q-history-mcp-server
+pipx install .
 ```
 
-### Step 3: Create Virtual Environment
+### Step 3: Configure Q CLI Agent
 
 ```bash
-# Create isolated Python environment
-python3 -m venv venv
-
-# Activate virtual environment
-source venv/bin/activate
-
-# Upgrade pip to latest version
-pip install --upgrade pip
-```
-
-### Step 4: Install Dependencies
-
-```bash
-# Install core dependencies
-pip install -r requirements.txt
-
-# Verify installation
-python -c "import sentence_transformers; print('✅ Dependencies installed successfully')"
-```
-
-### Step 5: Configure Q CLI Agent
-
-```bash
-# Create agent configuration directory
 mkdir -p ~/.aws/amazonq/cli-agents
 
-# Get installation path
-INSTALL_PATH=$(pwd)
+# Get pipx binary path
+PIPX_BIN_DIR=$(pipx environment --value PIPX_BIN_DIR)
 
-# Create agent configuration
 cat > ~/.aws/amazonq/cli-agents/history-agent.json << EOF
 {
   "\$schema": "https://raw.githubusercontent.com/aws/amazon-q-developer-cli/refs/heads/main/schemas/agent-v1.json",
@@ -81,11 +66,9 @@ cat > ~/.aws/amazonq/cli-agents/history-agent.json << EOF
   "prompt": null,
   "mcpServers": {
     "q-history": {
-      "command": "${INSTALL_PATH}/venv/bin/python",
-      "args": ["${INSTALL_PATH}/q_history_mcp/server_nonumpy.py"],
-      "env": {
-        "PYTHONPATH": "${INSTALL_PATH}"
-      }
+      "command": "${PIPX_BIN_DIR}/q-history-mcp",
+      "args": [],
+      "env": {}
     }
   },
   "tools": ["*"],
@@ -103,17 +86,7 @@ cat > ~/.aws/amazonq/cli-agents/history-agent.json << EOF
 EOF
 ```
 
-### Step 6: Test Installation
-
-```bash
-# Start Q CLI with the history agent
-q chat --agent history-agent
-
-# Test semantic search
-# In the Q CLI session, try: "search for conversations about AWS Lambda"
-```
-
-## Usage Examples
+## Usage
 
 ```bash
 # Start Q CLI with semantic search
@@ -127,62 +100,38 @@ q chat --agent history-agent
 
 ## Troubleshooting
 
-### Common Issues
-
-#### 1. Python Version Issues
+### pipx not found
 ```bash
-# Check Python version
-python3 --version
-
-# If too old, install newer Python (Amazon Linux 2)
-sudo amazon-linux-extras install python3.8
+# Add pipx to PATH
+export PATH="$HOME/.local/bin:$PATH"
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 ```
 
-#### 2. Permission Errors
+### Installation fails
 ```bash
-# Fix permissions
-chmod +x install.sh
-chmod -R 755 q_history_mcp/
+# Update pip and try again
+python3 -m pip install --user --upgrade pip
+pipx install . --force
 ```
 
-#### 3. Virtual Environment Issues
+### Agent not working
 ```bash
-# Remove and recreate venv
-rm -rf venv
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Check if binary exists
+ls -la $(pipx environment --value PIPX_BIN_DIR)/q-history-mcp
+
+# Reinstall if needed
+pipx uninstall q-history-mcp
+pipx install .
 ```
-
-#### 4. Database Not Found
-```bash
-# Check Q CLI database location
-ls -la ~/.aws/amazonq/
-find ~ -name "*.sqlite*" -path "*amazonq*" 2>/dev/null
-```
-
-#### 5. Memory Issues
-```bash
-# Check available memory
-free -h
-
-# If low memory, reduce conversation limit in server configuration
-```
-
-## Performance Notes
-
-- Initial indexing may take 5-10 minutes for large conversation histories (1000+ conversations)
-- Consider running on a machine with 8GB+ RAM for best performance
-- Embeddings cache will be ~100MB per 1000 conversations
 
 ## Uninstallation
 
 ```bash
+# Remove the package
+pipx uninstall q-history-mcp
+
 # Remove agent configuration
 rm ~/.aws/amazonq/cli-agents/history-agent.json
-
-# Remove installation directory
-rm -rf q-history-mcp-server
 
 # Remove cache (optional)
 rm -rf ~/.cache/q-history-mcp
@@ -190,4 +139,9 @@ rm -rf ~/.cache/q-history-mcp
 
 ---
 
-**Need help?** Open an issue on GitHub for support.
+**Benefits of pipx approach:**
+- ✅ Automatic dependency management
+- ✅ Isolated Python environment  
+- ✅ No virtual environment setup needed
+- ✅ Clean uninstallation
+- ✅ Works across different Python setups

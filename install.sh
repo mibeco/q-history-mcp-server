@@ -3,29 +3,36 @@ set -e
 
 echo "🚀 Installing Q CLI History MCP Server..."
 
-# Check Python version
-python3 -c "import sys; assert sys.version_info >= (3, 8), 'Python 3.8+ required'" || {
-    echo "❌ Python 3.8+ required. Please install Python 3.8 or higher."
-    exit 1
-}
+# Check if pipx is available
+if ! command -v pipx &> /dev/null; then
+    echo "📦 Installing pipx..."
+    if command -v apt &> /dev/null; then
+        # Ubuntu/Debian
+        sudo apt update && sudo apt install -y pipx
+    elif command -v yum &> /dev/null; then
+        # Amazon Linux/RHEL
+        sudo yum install -y python3-pip
+        python3 -m pip install --user pipx
+    elif command -v brew &> /dev/null; then
+        # macOS
+        brew install pipx
+    else
+        echo "❌ Please install pipx manually: python3 -m pip install --user pipx"
+        exit 1
+    fi
+    
+    # Ensure pipx is in PATH
+    pipx ensurepath
+    export PATH="$HOME/.local/bin:$PATH"
+fi
 
-# Create virtual environment
-echo "📦 Creating virtual environment..."
-python3 -m venv venv
-source venv/bin/activate
+# Install the package with pipx
+echo "📦 Installing Q CLI History MCP Server with pipx..."
+pipx install .
 
-# Install dependencies
-echo "⬇️  Installing dependencies..."
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# Test installation
-echo "🧪 Testing installation..."
-python -c "from q_history_mcp.database import QCliDatabase; print('✅ Database module working')"
-python -c "from sentence_transformers import SentenceTransformer; print('✅ Semantic search ready')"
-
-# Get installation path
-INSTALL_PATH=$(pwd)
+# Get installation path for pipx
+PIPX_BIN_DIR=$(pipx environment --value PIPX_BIN_DIR)
+INSTALL_PATH="${PIPX_BIN_DIR}/q-history-mcp"
 
 # Create agent configuration
 echo "⚙️  Creating Q CLI agent configuration..."
@@ -39,11 +46,9 @@ cat > ~/.aws/amazonq/cli-agents/history-agent.json << EOF
   "prompt": null,
   "mcpServers": {
     "q-history": {
-      "command": "${INSTALL_PATH}/venv/bin/python",
-      "args": ["${INSTALL_PATH}/q_history_mcp/server_nonumpy.py"],
-      "env": {
-        "PYTHONPATH": "${INSTALL_PATH}"
-      }
+      "command": "${INSTALL_PATH}",
+      "args": [],
+      "env": {}
     }
   },
   "tools": ["*"],
@@ -68,4 +73,4 @@ echo "2. Try semantic search: 'search for conversations about AWS'"
 echo "3. List recent conversations: 'list my recent conversations'"
 echo ""
 echo "📍 Agent configuration saved to: ~/.aws/amazonq/cli-agents/history-agent.json"
-echo "📍 Installation path: ${INSTALL_PATH}"
+echo "📍 Installed via pipx to: ${INSTALL_PATH}"
