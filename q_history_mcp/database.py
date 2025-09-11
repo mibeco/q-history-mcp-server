@@ -81,10 +81,9 @@ class QCliDatabase:
                             if 'history' in conv_data and conv_data['history']:
                                 for history_entry in conv_data['history']:
                                     if isinstance(history_entry, list):
-                                        # Count actual messages (not just list length)
+                                        # New format: list of messages
                                         for msg in history_entry:
                                             if isinstance(msg, dict):
-                                                # Count user prompts and assistant responses
                                                 if ('content' in msg and 'Prompt' in msg.get('content', {})) or 'ToolUse' in msg:
                                                     message_count += 1
                                         
@@ -97,6 +96,19 @@ class QCliDatabase:
                                                         if prompt_text:
                                                             preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                                                             break
+                                    
+                                    elif isinstance(history_entry, dict) and 'user' in history_entry:
+                                        # Old format: user/assistant pairs
+                                        message_count += 1  # Count as one conversation turn
+                                        
+                                        # Get preview from user content
+                                        if preview == "No preview available":
+                                            user_msg = history_entry['user']
+                                            if 'content' in user_msg and 'Prompt' in user_msg['content']:
+                                                if 'prompt' in user_msg['content']['Prompt']:
+                                                    prompt_text = user_msg['content']['Prompt']['prompt']
+                                                    if prompt_text:
+                                                        preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                                         
                                         # Look for agent information in conversation content
                                         if not agent_info:
@@ -257,10 +269,9 @@ class QCliDatabase:
                             if 'history' in conv_data and conv_data['history']:
                                 for history_entry in conv_data['history']:
                                     if isinstance(history_entry, list):
-                                        # Count actual messages (not just list length)
+                                        # New format: list of messages
                                         for msg in history_entry:
                                             if isinstance(msg, dict):
-                                                # Count user prompts and assistant responses
                                                 if ('content' in msg and 'Prompt' in msg.get('content', {})) or 'ToolUse' in msg:
                                                     message_count += 1
                                         
@@ -273,6 +284,19 @@ class QCliDatabase:
                                                         if prompt_text:
                                                             preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                                                             break
+                                    
+                                    elif isinstance(history_entry, dict) and 'user' in history_entry:
+                                        # Old format: user/assistant pairs
+                                        message_count += 1  # Count as one conversation turn
+                                        
+                                        # Get preview from user content
+                                        if preview == "No preview available":
+                                            user_msg = history_entry['user']
+                                            if 'content' in user_msg and 'Prompt' in user_msg['content']:
+                                                if 'prompt' in user_msg['content']['Prompt']:
+                                                    prompt_text = user_msg['content']['Prompt']['prompt']
+                                                    if prompt_text:
+                                                        preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                             
                             if message_count > 0:
                                 workspace = key.split('|')[0] if '|' in key else key
