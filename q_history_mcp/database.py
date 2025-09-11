@@ -212,55 +212,70 @@ class QCliDatabase:
         
         return await asyncio.get_event_loop().run_in_executor(None, _query)
     
-    async def search_conversations(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+    async def search_conversations(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
         """Search conversations by text content."""
         def _query():
             results = []
             
-            # Search through all history files
-            for history_file in self.history_dir.glob("chat-history-*.json"):
-                try:
-                    with open(history_file, 'r') as f:
-                        content = f.read()
+            # Search SQLite database
+            try:
+                import sqlite3
+                with sqlite3.connect(self.db_path) as conn:
+                    cursor = conn.cursor()
+                    # Search for conversations containing the query text
+                    cursor.execute("SELECT key, value FROM conversations WHERE value LIKE ? ORDER BY rowid DESC", 
+                                 (f'%{query}%',))
                     
-                    # Simple text search
-                    if query.lower() in content.lower():
-                        conv_data = json.loads(content)
-                        conv_id = history_file.stem.replace("chat-history-", "")
-                        
-                        # Extract metadata from LokiJS format
-                        messages = []
-                        message_count = 0
-                        
-                        # Navigate the LokiJS structure
-                        if 'collections' in conv_data and len(conv_data['collections']) > 0:
-                            tabs_collection = conv_data['collections'][0]
-                            if 'data' in tabs_collection and len(tabs_collection['data']) > 0:
-                                tab_data = tabs_collection['data'][0]
-                                if 'conversations' in tab_data and len(tab_data['conversations']) > 0:
-                                    conversation = tab_data['conversations'][0]
-                                    if 'messages' in conversation:
-                                        messages = conversation['messages']
-                                        message_count = len(messages)
-                        
-                        results.append({
-                            'id': conv_id,
-                            'created_at': history_file.stat().st_ctime,
-                            'updated_at': history_file.stat().st_mtime,
-                            'directory': 'unknown',  # Not available in this format
-                            'message_count': message_count,
-                            'preview': self._get_conversation_preview(messages)
-                        })
-                        
-                        if len(results) >= limit:
-                            break
+                    for key, value in cursor.fetchall():
+                        try:
+                            conv_data = json.loads(value)
+                            conv_id = conv_data.get('conversation_id', key.split('/')[-1])
                             
-                except (json.JSONDecodeError, FileNotFoundError):
-                    continue
+                            # Count messages and get preview
+                            message_count = 0
+                            preview = "No preview available"
+                            
+                            if 'history' in conv_data and conv_data['history']:
+                                for history_entry in conv_data['history']:
+                                    if isinstance(history_entry, list):
+                                        message_count += len(history_entry)
+                                        
+                                        # Get preview from first user prompt
+                                        if preview == "No preview available":
+                                            for msg in history_entry:
+                                                if isinstance(msg, dict) and 'content' in msg:
+                                                    if 'Prompt' in msg['content']:
+                                                        prompt_text = msg['content']['Prompt'].get('prompt', '')
+                                                        if prompt_text:
+                                                            preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
+                                                            break
+                            
+                            if message_count > 0:
+                                workspace = key.split('|')[0] if '|' in key else key
+                                if workspace.startswith('/'):
+                                    workspace = workspace.split('/')[-1] or workspace.split('/')[-2]
+                                
+                                results.append({
+                                    'id': conv_id,
+                                    'message_count': message_count,
+                                    'preview': preview,
+                                    'workspace': workspace,
+                                    'full_path': key.split('|')[0] if '|' in key else key,
+                                    'query_match': query
+                                })
+                                
+                                if len(results) >= limit:
+                                    break
+                                    
+                        except Exception as e:
+                            continue
+                            
+                return results
+                
+            except Exception as e:
+                pass
             
-            # Sort by modification time
-            results.sort(key=lambda x: x['updated_at'], reverse=True)
-            return results[:limit]
+            return []
         
         return await asyncio.get_event_loop().run_in_executor(None, _query)
     
