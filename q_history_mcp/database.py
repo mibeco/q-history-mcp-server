@@ -1,82 +1,61 @@
 """Database access for Q CLI conversation history."""
 
-import sqlite3
 import json
 import asyncio
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+import os
 
 
 class QCliDatabase:
-    """Read-only access to Q CLI conversation database and history files."""
+    """Read-only access to Q CLI conversation history files."""
     
-    def __init__(self, db_path: Optional[str] = None, history_dir: Optional[str] = None):
-        """Initialize database connection."""
-        if db_path is None or history_dir is None:
-            # Auto-detect Q CLI paths
+    def __init__(self, history_dir: Optional[str] = None):
+        """Initialize history directory access."""
+        if history_dir is None:
+            # Auto-detect Q CLI history directory
             home = Path.home()
-            amazonq_dir = home / ".aws" / "amazonq"
+            history_dir = str(home / ".aws" / "amazonq" / "history")
             
-            if db_path is None:
-                possible_db_paths = [
-                    amazonq_dir / "data.sqlite3",
-                    amazonq_dir / "conversations.db",
-                    home / ".config" / "amazonq" / "data.sqlite3",
-                ]
-                
-                for path in possible_db_paths:
-                    if path.exists():
-                        db_path = str(path)
-                        break
-                else:
-                    raise FileNotFoundError("Q CLI database not found. Ensure Q CLI is installed.")
-            
-            if history_dir is None:
-                history_dir = str(amazonq_dir / "history")
-                if not Path(history_dir).exists():
-                    raise FileNotFoundError("Q CLI history directory not found.")
+            if not Path(history_dir).exists():
+                raise FileNotFoundError("Q CLI history directory not found. Ensure Q CLI is installed and has conversation history.")
         
-        self.db_path = db_path
         self.history_dir = Path(history_dir)
     
     async def list_conversations(self, limit: int = 50) -> List[Dict[str, Any]]:
         """List recent conversations with metadata."""
         def _query():
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            
-            # Get conversation keys from SQLite
-            cursor = conn.execute("""
-                SELECT key, value FROM conversations 
-                ORDER BY key DESC 
-                LIMIT ?
-            """, (limit,))
-            
             results = []
-            for row in cursor:
+            
+            # Get all history files
+            history_files = list(self.history_dir.glob("chat-history-*.json"))
+            
+            # Sort by modification time (newest first)
+            history_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+            
+            for history_file in history_files[:limit]:
                 try:
-                    # Load JSON file for this conversation
-                    history_file = self.history_dir / f"chat-history-{row['key']}.json"
-                    if history_file.exists():
-                        with open(history_file, 'r') as f:
-                            conv_data = json.load(f)
-                        
-                        # Extract metadata
-                        history = conv_data.get("history", [])
-                        message_count = len(history) if isinstance(history, list) else 0
-                        
-                        results.append({
-                            'id': row['key'],
-                            'created_at': history_file.stat().st_ctime,
-                            'updated_at': history_file.stat().st_mtime,
-                            'directory': conv_data.get('directory', 'unknown'),
-                            'message_count': message_count,
-                            'preview': self._get_conversation_preview(history)
-                        })
+                    with open(history_file, 'r') as f:
+                        conv_data = json.load(f)
+                    
+                    # Extract conversation ID from filename
+                    conv_id = history_file.stem.replace("chat-history-", "")
+                    
+                    # Extract metadata
+                    history = conv_data.get("history", [])
+                    message_count = len(history) if isinstance(history, list) else 0
+                    
+                    results.append({
+                        'id': conv_id,
+                        'created_at': history_file.stat().st_ctime,
+                        'updated_at': history_file.stat().st_mtime,
+                        'directory': conv_data.get('directory', 'unknown'),
+                        'message_count': message_count,
+                        'preview': self._get_conversation_preview(history)
+                    })
                 except (json.JSONDecodeError, FileNotFoundError, KeyError):
                     continue
             
-            conn.close()
             return results
         
         return await asyncio.get_event_loop().run_in_executor(None, _query)
@@ -101,7 +80,9 @@ class QCliDatabase:
             results = []
             
             # Search through all history files
-            for history_file in self.history_dir.glob("chat-history-*.json"):
+            history_files = list(self.history_dir.glob("chat-history-*.json"))
+            
+            for history_file in history_files:
                 try:
                     with open(history_file, 'r') as f:
                         content = f.read()
