@@ -79,18 +79,40 @@ class QCliDatabase:
                                                             preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
                                                             break
                                         
-                                        # Look for agent information in additional_context
+                                        # Look for agent information in conversation content
                                         if not agent_info:
                                             for msg in history_entry:
-                                                if isinstance(msg, dict) and 'additional_context' in msg:
-                                                    context = msg['additional_context']
-                                                    if 'agent' in context.lower() or 'specialist' in context.lower():
-                                                        # Try to extract agent name from context
-                                                        lines = context.split('\n')
-                                                        for line in lines:
-                                                            if 'agent' in line.lower() and ('specialist' in line.lower() or 'with' in line.lower()):
-                                                                agent_info = line.strip()[:50]
+                                                if isinstance(msg, dict):
+                                                    # Check additional_context for agent info
+                                                    if 'additional_context' in msg:
+                                                        context = msg['additional_context']
+                                                        if 'agent' in context.lower():
+                                                            lines = context.split('\n')
+                                                            for line in lines:
+                                                                if ('agent' in line.lower() and 
+                                                                    ('specialist' in line.lower() or 'with' in line.lower() or 
+                                                                     'chatting with' in line.lower() or 'you are' in line.lower())):
+                                                                    agent_info = line.strip()[:80]
+                                                                    # Clean up the agent info
+                                                                    if 'you are chatting with' in agent_info.lower():
+                                                                        agent_info = agent_info.split('chatting with')[-1].strip()
+                                                                    elif 'you are' in agent_info.lower():
+                                                                        agent_info = agent_info.split('you are')[-1].strip()
+                                                                    break
+                                                    
+                                                    # Check for agent patterns in prompt content
+                                                    if 'content' in msg and 'Prompt' in msg['content']:
+                                                        prompt = msg['content']['Prompt'].get('prompt', '')
+                                                        if '--agent' in prompt:
+                                                            # Extract agent name from command line
+                                                            parts = prompt.split('--agent')
+                                                            if len(parts) > 1:
+                                                                agent_part = parts[1].strip().split()[0]
+                                                                agent_info = f"Agent: {agent_part}"
                                                                 break
+                                                
+                                                if agent_info:
+                                                    break
                             
                             if message_count > 0:
                                 # Extract directory name from path
@@ -105,7 +127,7 @@ class QCliDatabase:
                                     'created_date': 'Unknown',
                                     'workspace': workspace,
                                     'full_path': key.split('|')[0] if '|' in key else key,
-                                    'agent': agent_info or 'Default Q'
+                                    'agent': agent_info or 'Unknown (not stored in conversation data)'
                                 })
                                 
                                 if len(results) >= limit:
