@@ -52,12 +52,16 @@ class QCliDatabase:
                 import sqlite3
                 with sqlite3.connect(self.db_path) as conn:
                     cursor = conn.cursor()
-                    cursor.execute("SELECT key, value FROM conversations ORDER BY rowid DESC")
+                    cursor.execute("SELECT rowid, key, value FROM conversations ORDER BY rowid DESC")
                     
-                    for key, value in cursor.fetchall():
+                    for rowid, key, value in cursor.fetchall():
                         try:
                             conv_data = json.loads(value)
                             conv_id = conv_data.get('conversation_id', key.split('/')[-1])
+                            
+                            # Convert rowid to approximate timestamp
+                            import datetime
+                            estimated_timestamp = datetime.datetime.now() - datetime.timedelta(seconds=(1000000 - rowid) * 60)
                             
                             # Count messages in history
                             message_count = 0
@@ -124,7 +128,7 @@ class QCliDatabase:
                                     'id': conv_id,
                                     'message_count': message_count,
                                     'preview': preview,
-                                    'created_date': 'Unknown',
+                                    'created_date': estimated_timestamp.isoformat(),
                                     'workspace': workspace,
                                     'full_path': key.split('|')[0] if '|' in key else key,
                                     'agent': agent_info or 'Unknown (not stored in conversation data)'
@@ -223,10 +227,10 @@ class QCliDatabase:
                 with sqlite3.connect(self.db_path) as conn:
                     cursor = conn.cursor()
                     # Search for conversations containing the query text
-                    cursor.execute("SELECT key, value FROM conversations WHERE value LIKE ? ORDER BY rowid DESC", 
+                    cursor.execute("SELECT rowid, key, value FROM conversations WHERE value LIKE ? ORDER BY rowid DESC", 
                                  (f'%{query}%',))
                     
-                    for key, value in cursor.fetchall():
+                    for rowid, key, value in cursor.fetchall():
                         try:
                             conv_data = json.loads(value)
                             conv_id = conv_data.get('conversation_id', key.split('/')[-1])
