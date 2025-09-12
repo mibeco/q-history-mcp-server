@@ -12,18 +12,32 @@ if ! command -v pipx &> /dev/null; then
     elif command -v yum &> /dev/null; then
         # Amazon Linux/RHEL
         sudo yum install -y python3-pip
-        python3 -m pip install --user pipx
+        if [[ -n "$VIRTUAL_ENV" ]]; then
+            # Inside venv - install without --user
+            python3 -m pip install pipx
+        else
+            # Outside venv - use --user
+            python3 -m pip install --user pipx
+        fi
     elif command -v brew &> /dev/null; then
         # macOS
         brew install pipx
     else
-        echo "❌ Please install pipx manually: python3 -m pip install --user pipx"
-        exit 1
+        echo "📦 Installing pipx with pip..."
+        if [[ -n "$VIRTUAL_ENV" ]]; then
+            # Inside venv - install without --user
+            python3 -m pip install pipx
+        else
+            # Outside venv - use --user
+            python3 -m pip install --user pipx
+        fi
     fi
     
-    # Ensure pipx is in PATH
-    pipx ensurepath
-    export PATH="$HOME/.local/bin:$PATH"
+    # Ensure pipx is in PATH (only if not in venv)
+    if [[ -z "$VIRTUAL_ENV" ]]; then
+        pipx ensurepath
+        export PATH="$HOME/.local/bin:$PATH"
+    fi
 fi
 
 # Install the package with pipx
