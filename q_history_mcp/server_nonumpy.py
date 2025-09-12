@@ -312,9 +312,11 @@ async def export_conversation(
                                         markdown += f"## 👤 User Message {message_num}\n\n{prompt}\n\n"
                                 
                                 if 'assistant' in history_entry and 'Response' in history_entry['assistant']:
-                                    response = history_entry['assistant']['Response'].get('response', '')
-                                    if response:
-                                        markdown += f"## 🤖 Assistant Response {message_num}\n\n{response}\n\n"
+                                    response_data = history_entry['assistant']['Response']
+                                    if isinstance(response_data, dict) and 'content' in response_data:
+                                        response = response_data['content']
+                                        if response:
+                                            markdown += f"## 🤖 Assistant Response {message_num}\n\n{response}\n\n"
                                 
                                 message_num += 1
                             
