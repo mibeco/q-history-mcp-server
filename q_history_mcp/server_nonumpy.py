@@ -285,7 +285,48 @@ async def export_conversation(
                 elif msg.get('type') == 'answer':
                     markdown += f"## 🤖 Assistant Response {i+1}\n\n{msg['body']}\n\n"
         else:
-            markdown += "*Note: Full message content extraction from SQLite format not yet implemented. This export contains metadata only.*\n\n"
+            # SQLite format - extract from conversation history
+            from q_history_mcp.database import QCliDatabase
+            import sqlite3
+            import json
+            
+            # Get raw conversation data from SQLite
+            db_instance = QCliDatabase()
+            with sqlite3.connect(db_instance.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT value FROM conversations WHERE value LIKE ?", (f'%{conversation_id}%',))
+                result = cursor.fetchone()
+                
+                if result:
+                    conv_data = json.loads(result[0])
+                    message_num = 1
+                    
+                    if 'history' in conv_data and conv_data['history']:
+                        for history_entry in conv_data['history']:
+                            if isinstance(history_entry, dict) and 'user' in history_entry:
+                                # Old format: user/assistant pairs
+                                user_msg = history_entry['user']
+                                if 'content' in user_msg and 'Prompt' in user_msg['content']:
+                                    prompt = user_msg['content']['Prompt'].get('prompt', '')
+                                    if prompt:
+                                        markdown += f"## 👤 User Message {message_num}\n\n{prompt}\n\n"
+                                
+                                if 'assistant' in history_entry and 'Response' in history_entry['assistant']:
+                                    response = history_entry['assistant']['Response'].get('response', '')
+                                    if response:
+                                        markdown += f"## 🤖 Assistant Response {message_num}\n\n{response}\n\n"
+                                
+                                message_num += 1
+                            
+                            elif isinstance(history_entry, list):
+                                # New format: list of messages
+                                for msg in history_entry:
+                                    if isinstance(msg, dict) and 'content' in msg:
+                                        if 'Prompt' in msg['content']:
+                                            prompt = msg['content']['Prompt'].get('prompt', '')
+                                            if prompt:
+                                                markdown += f"## 👤 User Message {message_num}\n\n{prompt}\n\n"
+                                                message_num += 1
         
         # Write to file
         import os
