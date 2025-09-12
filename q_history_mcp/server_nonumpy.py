@@ -239,5 +239,72 @@ def main():
         print(f"Server error: {e}", file=sys.stderr)
         sys.exit(1)
 
+@mcp.tool(
+    name='export_conversation',
+    description='Export a conversation to markdown format'
+)
+async def export_conversation(
+    ctx: Context,
+    conversation_id: str = Field(..., description='The conversation ID to export'),
+    output_path: str = Field(..., description='Path where to save the markdown file')
+) -> Dict[str, Any]:
+    """Export a conversation to markdown format."""
+    try:
+        from q_history_mcp.database import QCliDatabase
+        db = QCliDatabase()
+        
+        # Get conversation metadata
+        conversations = await db.list_conversations(limit=1000)
+        conv_meta = next((c for c in conversations if c['id'] == conversation_id), None)
+        
+        if not conv_meta:
+            return {"status": "error", "message": f"Conversation {conversation_id} not found"}
+        
+        # Generate markdown content
+        markdown = f"""# Q CLI Conversation Export
+
+**Conversation ID:** `{conversation_id}`  
+**Workspace:** {conv_meta['workspace']}  
+**Created:** {conv_meta['created_date']}  
+**Messages:** {conv_meta['message_count']}  
+**Preview:** {conv_meta['preview']}
+
+---
+
+"""
+        
+        # Get full conversation details
+        conversation = await db.get_conversation(conversation_id)
+        
+        if conversation and 'messages' in conversation:
+            # LokiJS format
+            messages = conversation['messages']
+            for i, msg in enumerate(messages):
+                if msg.get('type') == 'prompt':
+                    markdown += f"## 👤 User Message {i+1}\n\n{msg['body']}\n\n"
+                elif msg.get('type') == 'answer':
+                    markdown += f"## 🤖 Assistant Response {i+1}\n\n{msg['body']}\n\n"
+        else:
+            markdown += "*Note: Full message content extraction from SQLite format not yet implemented. This export contains metadata only.*\n\n"
+        
+        # Write to file
+        import os
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(markdown)
+        
+        await ctx.info(f"Exported conversation to {output_path}")
+        return {
+            "status": "success", 
+            "message": f"Conversation exported to {output_path}",
+            "file_path": output_path,
+            "conversation_id": conversation_id
+        }
+        
+    except Exception as e:
+        await ctx.error(f"Failed to export conversation: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 if __name__ == '__main__':
     main()
