@@ -289,11 +289,24 @@ async def export_conversation(
         
         # Write to file
         import os
+        from pathlib import Path
+        
+        # Expand user path and resolve
+        output_path = str(Path(output_path).expanduser().resolve())
+        
+        # Create directory if needed
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
+        # Write file with explicit error checking
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(markdown)
         
-        await ctx.info(f"Exported conversation to {output_path}")
+        # Verify file was created
+        if not os.path.exists(output_path):
+            raise Exception(f"File was not created at {output_path}")
+        
+        file_size = os.path.getsize(output_path)
+        await ctx.info(f"Exported conversation to {output_path} ({file_size} bytes)")
         return {
             "status": "success", 
             "message": f"Conversation exported to {output_path}",
