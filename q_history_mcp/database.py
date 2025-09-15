@@ -222,6 +222,7 @@ class QCliDatabase:
     async def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Get full conversation data."""
         def _query():
+            # First try LokiJS format
             history_file = self.history_dir / f"chat-history-{conversation_id}.json"
             if history_file.exists():
                 try:
@@ -238,7 +239,67 @@ class QCliDatabase:
                     
                     return data  # Fallback to raw data
                 except json.JSONDecodeError:
-                    return None
+                    pass
+            
+            # If not found in LokiJS, try SQLite
+            if self.db_path.exists():
+                try:
+                    import sqlite3
+                    with sqlite3.connect(self.db_path) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("SELECT value FROM conversations WHERE value LIKE ?", (f'%{conversation_id}%',))
+                        result = cursor.fetchone()
+                        
+                        if result:
+                            conv_data = json.loads(result[0])
+                            
+                            # Convert SQLite format to a more readable format
+                            messages = []
+                            if 'history' in conv_data and conv_data['history']:
+                                for history_entry in conv_data['history']:
+                                    if isinstance(history_entry, dict) and 'user' in history_entry:
+                                        # Old format: user/assistant pairs
+                                        user_msg = history_entry['user']
+                                        if 'content' in user_msg and 'Prompt' in user_msg['content']:
+                                            prompt = user_msg['content']['Prompt'].get('prompt', '')
+                                            if prompt:
+                                                messages.append({
+                                                    'type': 'prompt',
+                                                    'body': prompt,
+                                                    'timestamp': user_msg.get('timestamp', '')
+                                                })
+                                        
+                                        if 'assistant' in history_entry and 'Response' in history_entry['assistant']:
+                                            response_data = history_entry['assistant']['Response']
+                                            if isinstance(response_data, dict) and 'content' in response_data:
+                                                response = response_data['content']
+                                                if response:
+                                                    messages.append({
+                                                        'type': 'answer',
+                                                        'body': response,
+                                                        'message_id': response_data.get('message_id', '')
+                                                    })
+                                    
+                                    elif isinstance(history_entry, list):
+                                        # New format: list of messages
+                                        for msg in history_entry:
+                                            if isinstance(msg, dict) and 'content' in msg:
+                                                if 'Prompt' in msg['content']:
+                                                    prompt = msg['content']['Prompt'].get('prompt', '')
+                                                    if prompt:
+                                                        messages.append({
+                                                            'type': 'prompt',
+                                                            'body': prompt
+                                                        })
+                            
+                            return {
+                                'conversation_id': conversation_id,
+                                'messages': messages,
+                                'raw_data': conv_data
+                            }
+                except Exception:
+                    pass
+            
             return None
         
         return await asyncio.get_event_loop().run_in_executor(None, _query)
