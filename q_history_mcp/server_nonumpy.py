@@ -173,39 +173,15 @@ async def search_conversations(
         from q_history_mcp.database import QCliDatabase
         db = QCliDatabase()
         
-        # Expand search terms for better matching
-        expanded_queries = [query.lower()]
-        
-        # Add related terms for common searches
-        if 'algorithm' in query.lower():
-            expanded_queries.extend(['dijkstra', 'bubble', 'sort', 'search', 'linear', 'binary'])
-        if 'sort' in query.lower():
-            expanded_queries.extend(['bubble', 'quick', 'merge', 'heap', 'algorithm'])
-        if 'data structure' in query.lower():
-            expanded_queries.extend(['stack', 'queue', 'tree', 'graph', 'array', 'list'])
-        
-        # Search with all expanded terms
-        all_results = {}
-        for search_term in expanded_queries:
-            results = await db.search_conversations(query=search_term, limit=limit)
-            for result in results:
-                conv_id = result['id']
-                if conv_id not in all_results:
-                    all_results[conv_id] = result
-                    result['matched_terms'] = [search_term]
-                else:
-                    all_results[conv_id]['matched_terms'].append(search_term)
-        
-        final_results = list(all_results.values())[:limit]
-        
-        await ctx.info(f"Found {len(final_results)} matches for '{query}' (expanded search)")
+        # Text search
+        results = await db.search_conversations(query=query, limit=limit)
+        await ctx.info(f"Found {len(results)} text matches")
         return {
             "status": "success",
             "query": query,
-            "expanded_terms": expanded_queries,
-            "search_type": "text_expanded",
-            "results": final_results,
-            "count": len(final_results)
+            "search_type": "text",
+            "results": results,
+            "count": len(results)
         }
         
     except Exception as e:
