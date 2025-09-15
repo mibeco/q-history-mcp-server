@@ -1,2 +1,0 @@
-[console_scripts]
-q-history-mcp = q_history_mcp.server_nonumpy:main
