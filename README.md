@@ -81,23 +81,25 @@ HistoryEntry {
 
 ### Q CLI Storage Limitations
 1. **Agent Information Not Stored**: The `agents` field is marked `#[serde(skip)]` in Q CLI source, so agent information is runtime-only and not persisted
-2. **Assistant Messages Truncated**: Only opening phrases of assistant responses are stored (~65-150 chars), not full content
-3. **User Messages Complete**: User prompts and messages are stored in full
-4. **No Timestamps**: Conversation creation/modification times not explicitly stored
-5. **Limited History**: Only ~50 recent conversations retained (older ones cleaned up)
+2. **No Timestamps**: Conversation creation/modification times not explicitly stored (we estimate from SQLite rowid)
+3. **Limited History**: Only ~50-100 recent conversations retained (older ones cleaned up by Q CLI)
 
 ### What Works Well
 - ✅ Browse all available conversations with workspace context
-- ✅ Search across conversation content effectively  
+- ✅ Search across conversation content with actual message text matching
 - ✅ View complete user message history
+- ✅ View complete assistant responses (full content, not truncated)
 - ✅ See conversation flow and structure
 - ✅ Workspace/directory identification
+- ✅ Export conversations to markdown with full content
+- ✅ Realistic timestamp estimation from SQLite rowid
+- ✅ Cross-platform support (Mac and Linux)
+- ✅ Handles both old dict format and new list format conversations
 
 ### What's Limited
-- ❌ No agent identification (shows "Unknown")
-- ❌ Assistant responses truncated to opening phrases only
-- ❌ No conversation timestamps
-- ❌ Limited to recent conversations only
+- ❌ No agent identification (shows "Unknown" - agent info not stored in Q CLI)
+- ❌ Limited to recent conversations only (~50-100 depending on Q CLI cleanup)
+- ❌ Timestamps are estimated, not exact (Q CLI doesn't store creation times)
 
 ## Tools Available
 
@@ -108,7 +110,7 @@ Lists recent conversations with metadata including workspace, message count, and
 Searches conversation content using text matching across the SQLite database.
 
 ### `get_conversation_details`
-Retrieves full conversation content including all stored messages (with limitations noted above).
+Retrieves full conversation content including all stored messages and assistant responses.
 
 ### `export_conversation`
 Exports any conversation to markdown format with full message content and metadata.
