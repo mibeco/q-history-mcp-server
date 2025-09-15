@@ -242,7 +242,7 @@ class QCliDatabase:
                     pass
             
             # If not found in LokiJS, try SQLite
-            if self.db_path.exists():
+            if Path(self.db_path).exists():
                 try:
                     import sqlite3
                     with sqlite3.connect(self.db_path) as conn:
