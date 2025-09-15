@@ -1,5 +1,8 @@
 # Q CLI History MCP Server
 
+**Version:** 1.0.0  
+**Author:** Michael Bennett Cohn
+
 An MCP (Model Context Protocol) server that provides access to Amazon Q Developer CLI conversation history through SQLite database integration.
 
 ## Features
