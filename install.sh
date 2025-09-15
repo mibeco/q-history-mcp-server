@@ -69,8 +69,7 @@ cat > ~/.aws/amazonq/cli-agents/history-agent.json << EOF
   "toolAliases": {},
   "allowedTools": [
     "fs_read",
-    "list_conversations", 
-    "search_conversations"
+    "@q-history/*"
   ],
   "resources": [],
   "hooks": {},
