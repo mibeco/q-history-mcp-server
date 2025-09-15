@@ -337,8 +337,14 @@ async def export_conversation(
         # Expand user path and resolve
         output_path = str(Path(output_path).expanduser().resolve())
         
+        # Ensure .md extension
+        if not output_path.endswith('.md'):
+            output_path += '.md'
+        
         # Create directory if needed
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        parent_dir = os.path.dirname(output_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         
         # Write file with explicit error checking
         with open(output_path, 'w', encoding='utf-8') as f:
