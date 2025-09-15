@@ -357,8 +357,8 @@ class QCliDatabase:
                                     elif isinstance(history_entry, list):
                                         # New format: list of messages
                                         for msg in history_entry:
-                                            if isinstance(msg, dict) and 'content' in msg:
-                                                if 'Prompt' in msg['content']:
+                                            if isinstance(msg, dict):
+                                                if 'content' in msg and 'Prompt' in msg['content']:
                                                     prompt = msg['content']['Prompt'].get('prompt', '')
                                                     if prompt:
                                                         all_text.append(prompt)
@@ -366,9 +366,30 @@ class QCliDatabase:
                                                         if query_lower in prompt.lower():
                                                             snippet = prompt[:150] + "..." if len(prompt) > 150 else prompt
                                                             matching_snippets.append(f"User: {snippet}")
+                                                
+                                                elif 'ToolUse' in msg:
+                                                    # Assistant response in ToolUse format
+                                                    tool_use = msg['ToolUse']
+                                                    if isinstance(tool_use, dict):
+                                                        # Look for response content in various fields
+                                                        response_text = ""
+                                                        if 'response' in tool_use:
+                                                            response_text = str(tool_use['response'])
+                                                        elif 'content' in tool_use:
+                                                            response_text = str(tool_use['content'])
+                                                        elif 'result' in tool_use:
+                                                            response_text = str(tool_use['result'])
+                                                        
+                                                        if response_text:
+                                                            all_text.append(response_text)
+                                                            message_count += 1
+                                                            if query_lower in response_text.lower():
+                                                                snippet = response_text[:150] + "..." if len(response_text) > 150 else response_text
+                                                                matching_snippets.append(f"Assistant: {snippet}")
                             
                             # Check if any message content matches the query
-                            if matching_snippets and message_count > 0:
+                            full_text = ' '.join(all_text).lower()
+                            if query_lower in full_text and message_count > 0:
                                 # Calculate creation date from rowid
                                 created_date = self._rowid_to_datetime(rowid)
                                 
