@@ -247,8 +247,22 @@ class QCliDatabase:
                     import sqlite3
                     with sqlite3.connect(self.db_path) as conn:
                         cursor = conn.cursor()
+                        # First try to find by conversation_id in the JSON
                         cursor.execute("SELECT value FROM conversations WHERE value LIKE ?", (f'%{conversation_id}%',))
                         result = cursor.fetchone()
+                        
+                        # If not found, try to find by matching the conversation_id field directly
+                        if not result:
+                            cursor.execute("SELECT rowid, key, value FROM conversations")
+                            for rowid, key, value in cursor.fetchall():
+                                try:
+                                    conv_data = json.loads(value)
+                                    stored_id = conv_data.get('conversation_id', key.split('/')[-1])
+                                    if stored_id == conversation_id:
+                                        result = (value,)
+                                        break
+                                except:
+                                    continue
                         
                         if result:
                             conv_data = json.loads(result[0])
