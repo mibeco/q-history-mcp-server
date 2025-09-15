@@ -31,6 +31,17 @@ q chat --agent history-agent
 
 That's it! The agent is ready to use.
 
+## Uninstallation
+
+To completely remove the Q CLI History MCP Server:
+
+```bash
+pipx uninstall q-history-mcp
+rm ~/.aws/amazonq/cli-agents/history-agent.json
+```
+
+This removes both the MCP server package and the Q CLI agent configuration.
+
 ## Usage
 
 Use with Q CLI agent:
