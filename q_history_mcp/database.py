@@ -305,86 +305,102 @@ class QCliDatabase:
         return await asyncio.get_event_loop().run_in_executor(None, _query)
     
     async def search_conversations(self, query: str, limit: int = 50) -> List[Dict[str, Any]]:
-        """Search conversations by text content."""
+        """Search conversations by actual message content."""
         def _query():
             results = []
+            query_lower = query.lower()
             
             # Search SQLite database
             try:
                 import sqlite3
                 with sqlite3.connect(self.db_path) as conn:
                     cursor = conn.cursor()
-                    # Search for conversations containing the query text
-                    cursor.execute("SELECT rowid, key, value FROM conversations WHERE value LIKE ? ORDER BY rowid DESC", 
-                                 (f'%{query}%',))
+                    cursor.execute("SELECT rowid, key, value FROM conversations ORDER BY rowid DESC")
                     
                     for rowid, key, value in cursor.fetchall():
                         try:
                             conv_data = json.loads(value)
                             conv_id = conv_data.get('conversation_id', key.split('/')[-1])
                             
-                            # Count messages and get preview
+                            # Extract all message content for searching
+                            all_text = []
                             message_count = 0
-                            preview = "No preview available"
+                            matching_snippets = []
                             
                             if 'history' in conv_data and conv_data['history']:
                                 for history_entry in conv_data['history']:
-                                    if isinstance(history_entry, list):
+                                    if isinstance(history_entry, dict) and 'user' in history_entry:
+                                        # Old format: user/assistant pairs
+                                        user_msg = history_entry['user']
+                                        if 'content' in user_msg and 'Prompt' in user_msg['content']:
+                                            prompt = user_msg['content']['Prompt'].get('prompt', '')
+                                            if prompt:
+                                                all_text.append(prompt)
+                                                message_count += 1
+                                                # Check if this message matches the query
+                                                if query_lower in prompt.lower():
+                                                    snippet = prompt[:150] + "..." if len(prompt) > 150 else prompt
+                                                    matching_snippets.append(f"User: {snippet}")
+                                        
+                                        if 'assistant' in history_entry and 'Response' in history_entry['assistant']:
+                                            response_data = history_entry['assistant']['Response']
+                                            if isinstance(response_data, dict) and 'content' in response_data:
+                                                response = response_data['content']
+                                                if response:
+                                                    all_text.append(response)
+                                                    message_count += 1
+                                                    # Check if this message matches the query
+                                                    if query_lower in response.lower():
+                                                        snippet = response[:150] + "..." if len(response) > 150 else response
+                                                        matching_snippets.append(f"Assistant: {snippet}")
+                                    
+                                    elif isinstance(history_entry, list):
                                         # New format: list of messages
                                         for msg in history_entry:
-                                            if isinstance(msg, dict):
-                                                if ('content' in msg and 'Prompt' in msg.get('content', {})) or 'ToolUse' in msg:
-                                                    message_count += 1
-                                        
-                                        # Get preview from first user prompt
-                                        if preview == "No preview available":
-                                            for msg in history_entry:
-                                                if isinstance(msg, dict) and 'content' in msg:
-                                                    if 'Prompt' in msg['content'] and 'prompt' in msg['content']['Prompt']:
-                                                        prompt_text = msg['content']['Prompt']['prompt']
-                                                        if prompt_text:
-                                                            preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
-                                                            break
-                                    
-                                    elif isinstance(history_entry, dict) and 'user' in history_entry:
-                                        # Old format: user/assistant pairs
-                                        message_count += 1  # Count as one conversation turn
-                                        
-                                        # Get preview from user content
-                                        if preview == "No preview available":
-                                            user_msg = history_entry['user']
-                                            if 'content' in user_msg and 'Prompt' in user_msg['content']:
-                                                if 'prompt' in user_msg['content']['Prompt']:
-                                                    prompt_text = user_msg['content']['Prompt']['prompt']
-                                                    if prompt_text:
-                                                        preview = prompt_text[:100] + "..." if len(prompt_text) > 100 else prompt_text
+                                            if isinstance(msg, dict) and 'content' in msg:
+                                                if 'Prompt' in msg['content']:
+                                                    prompt = msg['content']['Prompt'].get('prompt', '')
+                                                    if prompt:
+                                                        all_text.append(prompt)
+                                                        message_count += 1
+                                                        if query_lower in prompt.lower():
+                                                            snippet = prompt[:150] + "..." if len(prompt) > 150 else prompt
+                                                            matching_snippets.append(f"User: {snippet}")
                             
-                            if message_count > 0:
+                            # Check if any message content matches the query
+                            if matching_snippets and message_count > 0:
+                                # Calculate creation date from rowid
+                                created_date = self._rowid_to_datetime(rowid)
+                                
+                                # Get conversation preview (first user message)
+                                preview = "No preview available"
+                                if all_text:
+                                    preview = all_text[0][:100] + "..." if len(all_text[0]) > 100 else all_text[0]
+                                
                                 workspace = key.split('|')[0] if '|' in key else key
                                 if workspace.startswith('/'):
                                     workspace = workspace.split('/')[-1] or workspace.split('/')[-2]
                                 
                                 results.append({
                                     'id': conv_id,
+                                    'workspace': workspace,
+                                    'created_date': created_date.isoformat(),
                                     'message_count': message_count,
                                     'preview': preview,
-                                    'workspace': workspace,
-                                    'full_path': key.split('|')[0] if '|' in key else key,
-                                    'query_match': query
+                                    'matching_snippets': matching_snippets[:3],  # Include up to 3 matching snippets
+                                    'match_count': len(matching_snippets)
                                 })
                                 
                                 if len(results) >= limit:
                                     break
-                                    
-                        except Exception as e:
+                        
+                        except (json.JSONDecodeError, KeyError):
                             continue
-                            
-                return results
-                
-            except Exception as e:
+            
+            except Exception:
                 pass
             
-            return []
+            return results
         
         return await asyncio.get_event_loop().run_in_executor(None, _query)
     
