@@ -53,107 +53,27 @@ async def get_conversation_details(
         from q_history_mcp.database import QCliDatabase
         db = QCliDatabase()
         
-        # Find the conversation
-        import sqlite3
-        import json
+        # Get conversation using the same method as export
+        conversation = await db.get_conversation(conversation_id)
         
-        with sqlite3.connect(db.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT key, value FROM conversations WHERE value LIKE ?", (f'%{conversation_id}%',))
-            
-            for key, value in cursor.fetchall():
-                try:
-                    conv_data = json.loads(value)
-                    if conv_data.get('conversation_id') == conversation_id:
-                        
-                        # Extract messages
-                        messages = []
-                        agent_info = "Default Q"
-                        
-                        if 'history' in conv_data and conv_data['history']:
-                            for history_entry in conv_data['history']:
-                                if isinstance(history_entry, list):
-                                    for msg in history_entry:
-                                        if isinstance(msg, dict):
-                                            # Check for agent info in additional_context
-                                            if 'additional_context' in msg and agent_info == "Default Q":
-                                                context = msg['additional_context']
-                                                if 'agent' in context.lower():
-                                                    lines = context.split('\n')
-                                                    for line in lines:
-                                                        if 'agent' in line.lower() and ('specialist' in line.lower() or 'with' in line.lower()):
-                                                            agent_info = line.strip()[:100]
-                                                            break
-                                            
-                                            # Extract user message
-                                            if 'content' in msg and 'Prompt' in msg['content']:
-                                                prompt = msg['content']['Prompt'].get('prompt', '')
-                                                if prompt:
-                                                    messages.append({
-                                                        'type': 'user',
-                                                        'content': prompt,
-                                                        'timestamp': 'unknown'
-                                                    })
-                                            
-                                            # Extract assistant message  
-                                            elif 'ToolUse' in msg:
-                                                tool_use = msg['ToolUse']
-                                                content = tool_use.get('content', '')
-                                                if content:
-                                                    messages.append({
-                                                        'type': 'assistant', 
-                                                        'content': content,
-                                                        'timestamp': 'unknown'
-                                                    })
-                                # Handle newer format where history entries are objects
-                                elif isinstance(history_entry, dict):
-                                    if 'user' in history_entry:
-                                        user_msg = history_entry['user']
-                                        if isinstance(user_msg, dict) and 'content' in user_msg:
-                                            if 'Prompt' in user_msg['content']:
-                                                prompt = user_msg['content']['Prompt'].get('prompt', '')
-                                                if prompt:
-                                                    messages.append({
-                                                        'type': 'user',
-                                                        'content': prompt,
-                                                        'timestamp': 'unknown'
-                                                    })
-                                    
-                                    if 'assistant' in history_entry:
-                                        assistant_msg = history_entry['assistant']
-                                        if isinstance(assistant_msg, dict) and 'content' in assistant_msg:
-                                            content = assistant_msg['content']
-                                            if content:
-                                                messages.append({
-                                                    'type': 'assistant',
-                                                    'content': content,
-                                                    'timestamp': 'unknown'
-                                                })
-                        
-                        # Limit messages
-                        if len(messages) > message_limit:
-                            messages = messages[-message_limit:]
-                        
-                        workspace = key.split('|')[0] if '|' in key else key
-                        if workspace.startswith('/'):
-                            workspace = workspace.split('/')[-1] or workspace.split('/')[-2]
-                        
-                        await ctx.info(f"Retrieved conversation {conversation_id} with {len(messages)} messages")
-                        return {
-                            "status": "success",
-                            "conversation_id": conversation_id,
-                            "workspace": workspace,
-                            "full_path": key,
-                            "agent": agent_info,
-                            "total_messages": len(messages),
-                            "messages": messages
-                        }
-                        
-                except Exception as e:
-                    continue
+        if not conversation:
+            await ctx.error(f"Conversation {conversation_id} not found")
+            return {"status": "error", "message": f"Conversation {conversation_id} not found"}
         
-        await ctx.error(f"Conversation {conversation_id} not found")
-        return {"status": "error", "message": f"Conversation {conversation_id} not found"}
+        # Extract messages from the conversation
+        messages = conversation.get('messages', [])
+        
+        # Limit messages if requested
+        if message_limit and len(messages) > message_limit:
+            messages = messages[:message_limit]
+        
+        return {
+            "status": "success",
+            "conversation_id": conversation_id,
+            "messages": messages,
+            "total_messages": len(conversation.get('messages', [])),
+            "shown_messages": len(messages)
+        }
         
     except Exception as e:
         await ctx.error(f"Failed to get conversation details: {e}")
