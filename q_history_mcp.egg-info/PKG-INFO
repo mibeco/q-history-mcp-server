@@ -30,35 +30,32 @@ An MCP (Model Context Protocol) server that provides access to Amazon Q Develope
 ```bash
 git clone https://github.com/mibeco/q-history-mcp-server.git
 cd q-history-mcp-server
-python -m venv venv
-source venv/bin/activate  # or `venv\Scripts\activate` on Windows
-pip install -e .
+./install.sh
 ```
 
-2. Add to Q CLI MCP configuration (`~/.aws/amazonq/mcp-servers.json`):
-```json
-{
-  "q-history-mcp": {
-    "command": "/path/to/q-history-mcp-server/venv/bin/python",
-    "args": ["-m", "q_history_mcp.server_nonumpy"],
-    "env": {}
-  }
-}
+The install script will:
+- Install pipx if needed (handles Python version requirements automatically)
+- Install the MCP server package via pipx
+- Create the Q CLI agent configuration automatically
+- Set up all necessary permissions and paths
+
+2. Test the installation:
+```bash
+q chat --agent history-agent
 ```
 
-3. Create agent configuration (`~/.aws/amazonq/cli-agents/history-agent.json`):
-```json
-{
-  "name": "history-agent",
-  "description": "Q CLI conversation history specialist",
-  "prompt": "You are a Q CLI specialist with access to conversation history...",
-  "tools": [
-    "@q-history-mcp/list_conversations",
-    "@q-history-mcp/search_conversations", 
-    "@q-history-mcp/get_conversation_details"
-  ]
-}
+That's it! The agent is ready to use.
+
+## Uninstallation
+
+To completely remove the Q CLI History MCP Server:
+
+```bash
+pipx uninstall q-history-mcp
+rm ~/.aws/amazonq/cli-agents/history-agent.json
 ```
+
+This removes both the MCP server package and the Q CLI agent configuration.
 
 ## Usage
 
@@ -70,7 +67,7 @@ q chat --agent history-agent
 Example queries:
 - "Show me my recent conversations"
 - "Search for conversations about git"
-- "Show me the details of conversation [ID]"
+- "Export conversation [ID] to ~/conversation.md"
 
 ## Architecture
 
@@ -128,6 +125,9 @@ Searches conversation content using text matching across the SQLite database.
 ### `get_conversation_details`
 Retrieves full conversation content including all stored messages (with limitations noted above).
 
+### `export_conversation`
+Exports any conversation to markdown format with full message content and metadata.
+
 ## Development Notes
 
 The MCP server was developed through investigation of Q CLI's conversation storage mechanism:
@@ -140,12 +140,12 @@ The MCP server was developed through investigation of Q CLI's conversation stora
 
 ## Future Enhancements
 
-Potential improvements (not implemented):
-- Add timestamp extraction from SQLite rowid
-- Export conversations to markdown/text files
+Potential improvements:
 - Enhanced search with date ranges and workspace filtering
 - Agent detection heuristics based on conversation patterns
 - Integration with Q CLI's conversation cleanup mechanism
+- Bulk export functionality
+- Additional export formats (JSON, plain text)
 
 ## Contributing
 

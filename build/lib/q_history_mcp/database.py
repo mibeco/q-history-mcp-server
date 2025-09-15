@@ -391,11 +391,7 @@ class QCliDatabase:
                             full_text = ' '.join(all_text).lower()
                             if query_lower in full_text and message_count > 0:
                                 # Calculate creation date from rowid
-                                # Calculate estimated timestamp from rowid (same logic as list_conversations)
-                                max_rowid = 2000  # Approximate current max
-                                days_ago = max(0, (max_rowid - rowid) // 10)  # Rough estimate
-                                import datetime
-                                created_date = datetime.datetime.now() - datetime.timedelta(days=days_ago)
+                                created_date = self._rowid_to_datetime(rowid)
                                 
                                 # Get conversation preview (first user message)
                                 preview = "No preview available"
